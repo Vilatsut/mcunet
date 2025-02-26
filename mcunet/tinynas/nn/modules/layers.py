@@ -5,10 +5,25 @@
 from collections import OrderedDict
 
 import torch.nn as nn
-from ....utils import MyModule, build_activation, get_same_padding, SEModule, ShuffleLayer
+from ....utils import (
+    MyModule,
+    build_activation,
+    get_same_padding,
+    SEModule,
+    ShuffleLayer,
+)
 
-__all__ = ['set_layer_from_config', 'My2DLayer', 'ConvLayer', 'DepthConvLayer', 'PoolingLayer', 'IdentityLayer',
-           'LinearLayer', 'ZeroLayer', 'MBInvertedConvLayer']
+__all__ = [
+    "set_layer_from_config",
+    "My2DLayer",
+    "ConvLayer",
+    "DepthConvLayer",
+    "PoolingLayer",
+    "IdentityLayer",
+    "LinearLayer",
+    "ZeroLayer",
+    "MBInvertedConvLayer",
+]
 
 
 def set_layer_from_config(layer_config):
@@ -25,15 +40,21 @@ def set_layer_from_config(layer_config):
         MBInvertedConvLayer.__name__: MBInvertedConvLayer,
     }
 
-    layer_name = layer_config.pop('name')
+    layer_name = layer_config.pop("name")
     layer = name2layer[layer_name]
     return layer.build_from_config(layer_config)
 
 
 class My2DLayer(MyModule):
-
-    def __init__(self, in_channels, out_channels,
-                 use_bn=True, act_func='relu', dropout_rate=0, ops_order='weight_bn_act'):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        use_bn=True,
+        act_func="relu",
+        dropout_rate=0,
+        ops_order="weight_bn_act",
+    ):
         super(My2DLayer, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -48,46 +69,46 @@ class My2DLayer(MyModule):
         # batch norm
         if self.use_bn:
             if self.bn_before_weight:
-                modules['bn'] = nn.BatchNorm2d(in_channels)
+                modules["bn"] = nn.BatchNorm2d(in_channels)
             else:
-                modules['bn'] = nn.BatchNorm2d(out_channels)
+                modules["bn"] = nn.BatchNorm2d(out_channels)
         else:
-            modules['bn'] = None
+            modules["bn"] = None
         # activation
-        modules['act'] = build_activation(self.act_func, self.ops_list[0] != 'act')
+        modules["act"] = build_activation(self.act_func, self.ops_list[0] != "act")
         # dropout
         if self.dropout_rate > 0:
-            modules['dropout'] = nn.Dropout2d(self.dropout_rate, inplace=True)
+            modules["dropout"] = nn.Dropout2d(self.dropout_rate, inplace=True)
         else:
-            modules['dropout'] = None
+            modules["dropout"] = None
         # weight
-        modules['weight'] = self.weight_op()
+        modules["weight"] = self.weight_op()
 
         # add modules
         for op in self.ops_list:
             if modules[op] is None:
                 continue
-            elif op == 'weight':
+            elif op == "weight":
                 # dropout before weight operation
-                if modules['dropout'] is not None:
-                    self.add_module('dropout', modules['dropout'])
-                for key in modules['weight']:
-                    self.add_module(key, modules['weight'][key])
+                if modules["dropout"] is not None:
+                    self.add_module("dropout", modules["dropout"])
+                for key in modules["weight"]:
+                    self.add_module(key, modules["weight"][key])
             else:
                 self.add_module(op, modules[op])
 
     @property
     def ops_list(self):
-        return self.ops_order.split('_')
+        return self.ops_order.split("_")
 
     @property
     def bn_before_weight(self):
         for op in self.ops_list:
-            if op == 'bn':
+            if op == "bn":
                 return True
-            elif op == 'weight':
+            elif op == "weight":
                 return False
-        raise ValueError('Invalid ops_order: %s' % self.ops_order)
+        raise ValueError("Invalid ops_order: %s" % self.ops_order)
 
     def weight_op(self):
         raise NotImplementedError
@@ -107,12 +128,12 @@ class My2DLayer(MyModule):
     @property
     def config(self):
         return {
-            'in_channels': self.in_channels,
-            'out_channels': self.out_channels,
-            'use_bn': self.use_bn,
-            'act_func': self.act_func,
-            'dropout_rate': self.dropout_rate,
-            'ops_order': self.ops_order,
+            "in_channels": self.in_channels,
+            "out_channels": self.out_channels,
+            "use_bn": self.use_bn,
+            "act_func": self.act_func,
+            "dropout_rate": self.dropout_rate,
+            "ops_order": self.ops_order,
         }
 
     @staticmethod
@@ -121,10 +142,21 @@ class My2DLayer(MyModule):
 
 
 class ConvLayer(My2DLayer):
-
-    def __init__(self, in_channels, out_channels,
-                 kernel_size=3, stride=1, dilation=1, groups=1, bias=False, has_shuffle=False,
-                 use_bn=True, act_func='relu', dropout_rate=0, ops_order='weight_bn_act'):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        dilation=1,
+        groups=1,
+        bias=False,
+        has_shuffle=False,
+        use_bn=True,
+        act_func="relu",
+        dropout_rate=0,
+        ops_order="weight_bn_act",
+    ):
         # default normal 3x3_Conv with bn and relu
         self.kernel_size = kernel_size
         self.stride = stride
@@ -133,7 +165,9 @@ class ConvLayer(My2DLayer):
         self.bias = bias
         self.has_shuffle = has_shuffle
 
-        super(ConvLayer, self).__init__(in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order)
+        super(ConvLayer, self).__init__(
+            in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order
+        )
 
     def weight_op(self):
         padding = get_same_padding(self.kernel_size)
@@ -144,12 +178,18 @@ class ConvLayer(My2DLayer):
             padding[1] *= self.dilation
 
         weight_dict = OrderedDict()
-        weight_dict['conv'] = nn.Conv2d(
-            self.in_channels, self.out_channels, kernel_size=self.kernel_size, stride=self.stride, padding=padding,
-            dilation=self.dilation, groups=self.groups, bias=self.bias
+        weight_dict["conv"] = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=padding,
+            dilation=self.dilation,
+            groups=self.groups,
+            bias=self.bias,
         )
         if self.has_shuffle and self.groups > 1:
-            weight_dict['shuffle'] = ShuffleLayer(self.groups)
+            weight_dict["shuffle"] = ShuffleLayer(self.groups)
 
         return weight_dict
 
@@ -161,27 +201,27 @@ class ConvLayer(My2DLayer):
             kernel_size = self.kernel_size
         if self.groups == 1:
             if self.dilation > 1:
-                conv_str = '%dx%d_DilatedConv' % (kernel_size[0], kernel_size[1])
+                conv_str = "%dx%d_DilatedConv" % (kernel_size[0], kernel_size[1])
             else:
-                conv_str = '%dx%d_Conv' % (kernel_size[0], kernel_size[1])
+                conv_str = "%dx%d_Conv" % (kernel_size[0], kernel_size[1])
         else:
             if self.dilation > 1:
-                conv_str = '%dx%d_DilatedGroupConv' % (kernel_size[0], kernel_size[1])
+                conv_str = "%dx%d_DilatedGroupConv" % (kernel_size[0], kernel_size[1])
             else:
-                conv_str = '%dx%d_GroupConv' % (kernel_size[0], kernel_size[1])
-        conv_str += '_O%d' % self.out_channels
+                conv_str = "%dx%d_GroupConv" % (kernel_size[0], kernel_size[1])
+        conv_str += "_O%d" % self.out_channels
         return conv_str
 
     @property
     def config(self):
         return {
-            'name': ConvLayer.__name__,
-            'kernel_size': self.kernel_size,
-            'stride': self.stride,
-            'dilation': self.dilation,
-            'groups': self.groups,
-            'bias': self.bias,
-            'has_shuffle': self.has_shuffle,
+            "name": ConvLayer.__name__,
+            "kernel_size": self.kernel_size,
+            "stride": self.stride,
+            "dilation": self.dilation,
+            "groups": self.groups,
+            "bias": self.bias,
+            "has_shuffle": self.has_shuffle,
             **super(ConvLayer, self).config,
         }
 
@@ -191,10 +231,21 @@ class ConvLayer(My2DLayer):
 
 
 class DepthConvLayer(My2DLayer):
-
-    def __init__(self, in_channels, out_channels,
-                 kernel_size=3, stride=1, dilation=1, groups=1, bias=False, has_shuffle=False,
-                 use_bn=True, act_func='relu', dropout_rate=0, ops_order='weight_bn_act'):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        dilation=1,
+        groups=1,
+        bias=False,
+        has_shuffle=False,
+        use_bn=True,
+        act_func="relu",
+        dropout_rate=0,
+        ops_order="weight_bn_act",
+    ):
         # default normal 3x3_DepthConv with bn and relu
         self.kernel_size = kernel_size
         self.stride = stride
@@ -204,7 +255,12 @@ class DepthConvLayer(My2DLayer):
         self.has_shuffle = has_shuffle
 
         super(DepthConvLayer, self).__init__(
-            in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order,
+            in_channels,
+            out_channels,
+            use_bn,
+            act_func,
+            dropout_rate,
+            ops_order,
         )
 
     def weight_op(self):
@@ -216,15 +272,25 @@ class DepthConvLayer(My2DLayer):
             padding[1] *= self.dilation
 
         weight_dict = OrderedDict()
-        weight_dict['depth_conv'] = nn.Conv2d(
-            self.in_channels, self.in_channels, kernel_size=self.kernel_size, stride=self.stride, padding=padding,
-            dilation=self.dilation, groups=self.in_channels, bias=False
+        weight_dict["depth_conv"] = nn.Conv2d(
+            self.in_channels,
+            self.in_channels,
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=padding,
+            dilation=self.dilation,
+            groups=self.in_channels,
+            bias=False,
         )
-        weight_dict['point_conv'] = nn.Conv2d(
-            self.in_channels, self.out_channels, kernel_size=1, groups=self.groups, bias=self.bias
+        weight_dict["point_conv"] = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size=1,
+            groups=self.groups,
+            bias=self.bias,
         )
         if self.has_shuffle and self.groups > 1:
-            weight_dict['shuffle'] = ShuffleLayer(self.groups)
+            weight_dict["shuffle"] = ShuffleLayer(self.groups)
         return weight_dict
 
     @property
@@ -234,22 +300,22 @@ class DepthConvLayer(My2DLayer):
         else:
             kernel_size = self.kernel_size
         if self.dilation > 1:
-            conv_str = '%dx%d_DilatedDepthConv' % (kernel_size[0], kernel_size[1])
+            conv_str = "%dx%d_DilatedDepthConv" % (kernel_size[0], kernel_size[1])
         else:
-            conv_str = '%dx%d_DepthConv' % (kernel_size[0], kernel_size[1])
-        conv_str += '_O%d' % self.out_channels
+            conv_str = "%dx%d_DepthConv" % (kernel_size[0], kernel_size[1])
+        conv_str += "_O%d" % self.out_channels
         return conv_str
 
     @property
     def config(self):
         return {
-            'name': DepthConvLayer.__name__,
-            'kernel_size': self.kernel_size,
-            'stride': self.stride,
-            'dilation': self.dilation,
-            'groups': self.groups,
-            'bias': self.bias,
-            'has_shuffle': self.has_shuffle,
+            "name": DepthConvLayer.__name__,
+            "kernel_size": self.kernel_size,
+            "stride": self.stride,
+            "dilation": self.dilation,
+            "groups": self.groups,
+            "bias": self.bias,
+            "has_shuffle": self.has_shuffle,
             **super(DepthConvLayer, self).config,
         }
 
@@ -259,15 +325,25 @@ class DepthConvLayer(My2DLayer):
 
 
 class PoolingLayer(My2DLayer):
-
-    def __init__(self, in_channels, out_channels,
-                 pool_type, kernel_size=2, stride=2,
-                 use_bn=False, act_func=None, dropout_rate=0, ops_order='weight_bn_act'):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        pool_type,
+        kernel_size=2,
+        stride=2,
+        use_bn=False,
+        act_func=None,
+        dropout_rate=0,
+        ops_order="weight_bn_act",
+    ):
         self.pool_type = pool_type
         self.kernel_size = kernel_size
         self.stride = stride
 
-        super(PoolingLayer, self).__init__(in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order)
+        super(PoolingLayer, self).__init__(
+            in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order
+        )
 
     def weight_op(self):
         if self.stride == 1:
@@ -277,12 +353,17 @@ class PoolingLayer(My2DLayer):
             padding = 0
 
         weight_dict = OrderedDict()
-        if self.pool_type == 'avg':
-            weight_dict['pool'] = nn.AvgPool2d(
-                self.kernel_size, stride=self.stride, padding=padding, count_include_pad=False
+        if self.pool_type == "avg":
+            weight_dict["pool"] = nn.AvgPool2d(
+                self.kernel_size,
+                stride=self.stride,
+                padding=padding,
+                count_include_pad=False,
             )
-        elif self.pool_type == 'max':
-            weight_dict['pool'] = nn.MaxPool2d(self.kernel_size, stride=self.stride, padding=padding)
+        elif self.pool_type == "max":
+            weight_dict["pool"] = nn.MaxPool2d(
+                self.kernel_size, stride=self.stride, padding=padding
+            )
         else:
             raise NotImplementedError
         return weight_dict
@@ -293,16 +374,16 @@ class PoolingLayer(My2DLayer):
             kernel_size = (self.kernel_size, self.kernel_size)
         else:
             kernel_size = self.kernel_size
-        return '%dx%d_%sPool' % (kernel_size[0], kernel_size[1], self.pool_type.upper())
+        return "%dx%d_%sPool" % (kernel_size[0], kernel_size[1], self.pool_type.upper())
 
     @property
     def config(self):
         return {
-            'name': PoolingLayer.__name__,
-            'pool_type': self.pool_type,
-            'kernel_size': self.kernel_size,
-            'stride': self.stride,
-            **super(PoolingLayer, self).config
+            "name": PoolingLayer.__name__,
+            "pool_type": self.pool_type,
+            "kernel_size": self.kernel_size,
+            "stride": self.stride,
+            **super(PoolingLayer, self).config,
         }
 
     @staticmethod
@@ -311,22 +392,30 @@ class PoolingLayer(My2DLayer):
 
 
 class IdentityLayer(My2DLayer):
-
-    def __init__(self, in_channels, out_channels,
-                 use_bn=False, act_func=None, dropout_rate=0, ops_order='weight_bn_act'):
-        super(IdentityLayer, self).__init__(in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order)
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        use_bn=False,
+        act_func=None,
+        dropout_rate=0,
+        ops_order="weight_bn_act",
+    ):
+        super(IdentityLayer, self).__init__(
+            in_channels, out_channels, use_bn, act_func, dropout_rate, ops_order
+        )
 
     def weight_op(self):
         return None
 
     @property
     def module_str(self):
-        return 'Identity'
+        return "Identity"
 
     @property
     def config(self):
         return {
-            'name': IdentityLayer.__name__,
+            "name": IdentityLayer.__name__,
             **super(IdentityLayer, self).config,
         }
 
@@ -336,9 +425,16 @@ class IdentityLayer(My2DLayer):
 
 
 class LinearLayer(MyModule):
-
-    def __init__(self, in_features, out_features, bias=True,
-                 use_bn=False, act_func=None, dropout_rate=0, ops_order='weight_bn_act'):
+    def __init__(
+        self,
+        in_features,
+        out_features,
+        bias=True,
+        use_bn=False,
+        act_func=None,
+        dropout_rate=0,
+        ops_order="weight_bn_act",
+    ):
         super(LinearLayer, self).__init__()
 
         self.in_features = in_features
@@ -355,45 +451,47 @@ class LinearLayer(MyModule):
         # batch norm
         if self.use_bn:
             if self.bn_before_weight:
-                modules['bn'] = nn.BatchNorm1d(in_features)
+                modules["bn"] = nn.BatchNorm1d(in_features)
             else:
-                modules['bn'] = nn.BatchNorm1d(out_features)
+                modules["bn"] = nn.BatchNorm1d(out_features)
         else:
-            modules['bn'] = None
+            modules["bn"] = None
         # activation
-        modules['act'] = build_activation(self.act_func, self.ops_list[0] != 'act')
+        modules["act"] = build_activation(self.act_func, self.ops_list[0] != "act")
         # dropout
         if self.dropout_rate > 0:
-            modules['dropout'] = nn.Dropout(self.dropout_rate, inplace=True)
+            modules["dropout"] = nn.Dropout(self.dropout_rate, inplace=True)
         else:
-            modules['dropout'] = None
+            modules["dropout"] = None
         # linear
-        modules['weight'] = {'linear': nn.Linear(self.in_features, self.out_features, self.bias)}
+        modules["weight"] = {
+            "linear": nn.Linear(self.in_features, self.out_features, self.bias)
+        }
 
         # add modules
         for op in self.ops_list:
             if modules[op] is None:
                 continue
-            elif op == 'weight':
-                if modules['dropout'] is not None:
-                    self.add_module('dropout', modules['dropout'])
-                for key in modules['weight']:
-                    self.add_module(key, modules['weight'][key])
+            elif op == "weight":
+                if modules["dropout"] is not None:
+                    self.add_module("dropout", modules["dropout"])
+                for key in modules["weight"]:
+                    self.add_module(key, modules["weight"][key])
             else:
                 self.add_module(op, modules[op])
 
     @property
     def ops_list(self):
-        return self.ops_order.split('_')
+        return self.ops_order.split("_")
 
     @property
     def bn_before_weight(self):
         for op in self.ops_list:
-            if op == 'bn':
+            if op == "bn":
                 return True
-            elif op == 'weight':
+            elif op == "weight":
                 return False
-        raise ValueError('Invalid ops_order: %s' % self.ops_order)
+        raise ValueError("Invalid ops_order: %s" % self.ops_order)
 
     def forward(self, x):
         for module in self._modules.values():
@@ -402,19 +500,19 @@ class LinearLayer(MyModule):
 
     @property
     def module_str(self):
-        return '%dx%d_Linear' % (self.in_features, self.out_features)
+        return "%dx%d_Linear" % (self.in_features, self.out_features)
 
     @property
     def config(self):
         return {
-            'name': LinearLayer.__name__,
-            'in_features': self.in_features,
-            'out_features': self.out_features,
-            'bias': self.bias,
-            'use_bn': self.use_bn,
-            'act_func': self.act_func,
-            'dropout_rate': self.dropout_rate,
-            'ops_order': self.ops_order,
+            "name": LinearLayer.__name__,
+            "in_features": self.in_features,
+            "out_features": self.out_features,
+            "bias": self.bias,
+            "use_bn": self.use_bn,
+            "act_func": self.act_func,
+            "dropout_rate": self.dropout_rate,
+            "ops_order": self.ops_order,
         }
 
     @staticmethod
@@ -423,7 +521,6 @@ class LinearLayer(MyModule):
 
 
 class ZeroLayer(MyModule):
-
     def __init__(self, stride):
         super(ZeroLayer, self).__init__()
         self.stride = stride
@@ -433,13 +530,13 @@ class ZeroLayer(MyModule):
 
     @property
     def module_str(self):
-        return 'Zero'
+        return "Zero"
 
     @property
     def config(self):
         return {
-            'name': ZeroLayer.__name__,
-            'stride': self.stride,
+            "name": ZeroLayer.__name__,
+            "stride": self.stride,
         }
 
     @staticmethod
@@ -448,9 +545,20 @@ class ZeroLayer(MyModule):
 
 
 class MBInvertedConvLayer(MyModule):
+    SE_BASE_CHANNEL = True
 
-    def __init__(self, in_channels, out_channels,
-                 kernel_size=3, stride=1, expand_ratio=6, mid_channels=None, act_func='relu6', use_se=False):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        expand_ratio=6,
+        mid_channels=None,
+        act_func="relu6",
+        use_se=False,
+        no_dw=False,
+    ):
         super(MBInvertedConvLayer, self).__init__()
 
         self.in_channels = in_channels
@@ -462,6 +570,7 @@ class MBInvertedConvLayer(MyModule):
         self.mid_channels = mid_channels
         self.act_func = act_func
         self.use_se = use_se
+        self.no_dw = no_dw
 
         if self.mid_channels is None:
             feature_dim = round(self.in_channels * self.expand_ratio)
@@ -471,31 +580,70 @@ class MBInvertedConvLayer(MyModule):
         if self.expand_ratio == 1:
             self.inverted_bottleneck = None
         else:
-            self.inverted_bottleneck = nn.Sequential(OrderedDict([
-                ('conv', nn.Conv2d(self.in_channels, feature_dim, 1, 1, 0, bias=False)),
-                ('bn', nn.BatchNorm2d(feature_dim)),
-                ('act', build_activation(self.act_func, inplace=True)),
-            ]))
+            self.inverted_bottleneck = nn.Sequential(
+                OrderedDict(
+                    [
+                        (
+                            "conv",
+                            nn.Conv2d(
+                                self.in_channels, feature_dim, 1, 1, 0, bias=False
+                            ),
+                        ),
+                        ("bn", nn.BatchNorm2d(feature_dim)),
+                        ("act", build_activation(self.act_func, inplace=True)),
+                    ]
+                )
+            )
 
         pad = get_same_padding(self.kernel_size)
         depth_conv_modules = [
-            ('conv', nn.Conv2d(feature_dim, feature_dim, kernel_size, stride, pad, groups=feature_dim, bias=False)),
-            ('bn', nn.BatchNorm2d(feature_dim)),
-            ('act', build_activation(self.act_func, inplace=True))
+            (
+                "conv",
+                nn.Conv2d(
+                    feature_dim,
+                    feature_dim,
+                    kernel_size,
+                    stride,
+                    pad,
+                    groups=feature_dim,
+                    bias=False,
+                ),
+            ),
+            ("bn", nn.BatchNorm2d(feature_dim)),
+            ("act", build_activation(self.act_func, inplace=True)),
         ]
         if self.use_se:
-            depth_conv_modules.append(('se', SEModule(feature_dim)))
-        self.depth_conv = nn.Sequential(OrderedDict(depth_conv_modules))
+            if self.SE_BASE_CHANNEL:
+                # follow efficient to use divisor=1 for SE layer
+                depth_conv_modules.append(
+                    (
+                        "se",
+                        SEModule(
+                            feature_dim, reduced_base_chs=self.in_channels, divisor=1
+                        ),
+                    )
+                )
+            else:
+                depth_conv_modules.append(("se", SEModule(feature_dim)))
+        if not self.no_dw:
+            self.depth_conv = nn.Sequential(OrderedDict(depth_conv_modules))
+        else:
+            self.depth_conv = None
 
-        self.point_linear = nn.Sequential(OrderedDict([
-            ('conv', nn.Conv2d(feature_dim, out_channels, 1, 1, 0, bias=False)),
-            ('bn', nn.BatchNorm2d(out_channels)),
-        ]))
+        self.point_linear = nn.Sequential(
+            OrderedDict(
+                [
+                    ("conv", nn.Conv2d(feature_dim, out_channels, 1, 1, 0, bias=False)),
+                    ("bn", nn.BatchNorm2d(out_channels)),
+                ]
+            )
+        )
 
     def forward(self, x):
         if self.inverted_bottleneck:
             x = self.inverted_bottleneck(x)
-        x = self.depth_conv(x)
+        if not self.no_dw:
+            x = self.depth_conv(x)
         x = self.point_linear(x)
         return x
 
@@ -505,24 +653,29 @@ class MBInvertedConvLayer(MyModule):
             expand_ratio = self.expand_ratio
         else:
             expand_ratio = self.mid_channels // self.in_channels
-        layer_str = '%dx%d_MBConv%d_%s' % (self.kernel_size, self.kernel_size, expand_ratio, self.act_func.upper())
+        layer_str = "%dx%d_MBConv%d_%s" % (
+            self.kernel_size,
+            self.kernel_size,
+            expand_ratio,
+            self.act_func.upper(),
+        )
         if self.use_se:
-            layer_str = 'SE_' + layer_str
-        layer_str += '_O%d' % self.out_channels
+            layer_str = "SE_" + layer_str
+        layer_str += "_O%d" % self.out_channels
         return layer_str
 
     @property
     def config(self):
         return {
-            'name': MBInvertedConvLayer.__name__,
-            'in_channels': self.in_channels,
-            'out_channels': self.out_channels,
-            'kernel_size': self.kernel_size,
-            'stride': self.stride,
-            'expand_ratio': self.expand_ratio,
-            'mid_channels': self.mid_channels,
-            'act_func': self.act_func,
-            'use_se': self.use_se,
+            "name": MBInvertedConvLayer.__name__,
+            "in_channels": self.in_channels,
+            "out_channels": self.out_channels,
+            "kernel_size": self.kernel_size,
+            "stride": self.stride,
+            "expand_ratio": self.expand_ratio,
+            "mid_channels": self.mid_channels,
+            "act_func": self.act_func,
+            "use_se": self.use_se,
         }
 
     @staticmethod

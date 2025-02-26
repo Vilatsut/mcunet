@@ -1,15 +1,24 @@
-from .proxyless_nets import ProxylessNASNets, MobileInvertedResidualBlock
+from .mcunets import MCUNets, MobileInvertedResidualBlock
 from ..modules import *
 from ....utils import make_divisible, val2list
 
-__all__ = ['MobileNetV2']
+__all__ = ["MobileNetV2"]
 
 
-class MobileNetV2(ProxylessNASNets):
-
-    def __init__(self, n_classes=1000, width_mult=1, bn_param=(0.1, 1e-3), dropout_rate=0.2,
-                 ks=None, expand_ratio=None, depth_param=None, stage_width_list=None, no_mix_layer=False,
-                 disable_keep_last_channel=False):
+class MobileNetV2(MCUNets):
+    def __init__(
+        self,
+        n_classes=1000,
+        width_mult=1,
+        bn_param=(0.1, 1e-3),
+        dropout_rate=0.2,
+        ks=None,
+        expand_ratio=None,
+        depth_param=None,
+        stage_width_list=None,
+        no_mix_layer=False,
+        disable_keep_last_channel=False,
+    ):
 
         if ks is None:
             ks = 3
@@ -23,8 +32,11 @@ class MobileNetV2(ProxylessNASNets):
         if disable_keep_last_channel:
             last_channel = make_divisible(last_channel * width_mult, 8)
         else:
-            last_channel = make_divisible(last_channel * width_mult,
-                                          8) if width_mult > 1.0 else last_channel
+            last_channel = (
+                make_divisible(last_channel * width_mult, 8)
+                if width_mult > 1.0
+                else last_channel
+            )
 
         inverted_residual_setting = [
             # t, c, n, s
@@ -51,7 +63,13 @@ class MobileNetV2(ProxylessNASNets):
 
         # first conv layer
         first_conv = ConvLayer(
-            3, input_channel, kernel_size=3, stride=2, use_bn=True, act_func='relu6', ops_order='weight_bn_act'
+            3,
+            input_channel,
+            kernel_size=3,
+            stride=2,
+            use_bn=True,
+            act_func="relu6",
+            ops_order="weight_bn_act",
         )
         # inverted residual blocks
         blocks = []
@@ -68,10 +86,15 @@ class MobileNetV2(ProxylessNASNets):
                     kernel_size = ks[_pt]
                     _pt += 1
                 mobile_inverted_conv = MBInvertedConvLayer(
-                    in_channels=input_channel, out_channels=output_channel, kernel_size=kernel_size, stride=stride,
+                    in_channels=input_channel,
+                    out_channels=output_channel,
+                    kernel_size=kernel_size,
+                    stride=stride,
                     expand_ratio=t,
                 )
-                if t > 1 and stride == 1:  # NOTICE: we enforce no residual for the first block
+                if (
+                    t > 1 and stride == 1
+                ):  # NOTICE: we enforce no residual for the first block
                     if input_channel == output_channel:
                         shortcut = IdentityLayer(input_channel, input_channel)
                     else:
@@ -85,15 +108,24 @@ class MobileNetV2(ProxylessNASNets):
         # 1x1_conv before global average pooling
         if no_mix_layer:
             feature_mix_layer = None
-            classifier = LinearLayer(input_channel, n_classes, dropout_rate=dropout_rate)
+            classifier = LinearLayer(
+                input_channel, n_classes, dropout_rate=dropout_rate
+            )
         else:
             feature_mix_layer = ConvLayer(
-                input_channel, last_channel, kernel_size=1, use_bn=True, act_func='relu6', ops_order='weight_bn_act',
+                input_channel,
+                last_channel,
+                kernel_size=1,
+                use_bn=True,
+                act_func="relu6",
+                ops_order="weight_bn_act",
             )
 
             classifier = LinearLayer(last_channel, n_classes, dropout_rate=dropout_rate)
 
-        super(MobileNetV2, self).__init__(first_conv, blocks, feature_mix_layer, classifier)
+        super(MobileNetV2, self).__init__(
+            first_conv, blocks, feature_mix_layer, classifier
+        )
 
         # set bn param
         self.set_bn_param(momentum=bn_param[0], eps=bn_param[1])

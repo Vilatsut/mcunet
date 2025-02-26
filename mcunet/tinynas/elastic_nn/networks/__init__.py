@@ -1,1 +1,1 @@
-from .ofa_proxyless import *
+from .ofa_mcunets import *

@@ -10,61 +10,54 @@ __all__ = ['net_id_list', 'build_model', 'download_tflite']
 NET_INFO = {
     ##### imagenet models ######
     # mcunet models
-    'mcunet-in0': {
+    'mcunet-10fps': {
         'net_name': 'mcunet-10fps_imagenet',
         'description': 'MCUNet model that runs 10fps on STM32F746 (ImageNet)'
     },
-    'mcunet-in1': {
+    'mcunet-5fps': {
         'net_name': 'mcunet-5fps_imagenet',
         'description': 'MCUNet model that runs 5fps on STM32F746 (ImageNet)'
     },
-    'mcunet-in2': {
+    'mcunet-256kB': {
         'net_name': 'mcunet-256kb-1mb_imagenet',
         'description': 'MCUNet model that fits 256KB SRAM and 1MB Flash (ImageNet)',
     },
-    'mcunet-in3': {
+    'mcunet-320kB': {
         'net_name': 'mcunet-320kb-1mb_imagenet',
         'description': 'MCUNet model that fits 320KB SRAM and 1MB Flash (ImageNet)',
     },
-    'mcunet-in4': {
+    'mcunet-512kB': {
         'net_name': 'mcunet-512kb-2mb_imagenet',
         'description': 'MCUNet model that fits 512KB SRAM and 2MB Flash (ImageNet)',
     },
     # baseline models
-    'mbv2-w0.35': {
+    'mbv2-320kB': {
         'net_name': 'mbv2-w0.35-r144_imagenet',
         'description': 'scaled MobileNetV2 that fits 320KB SRAM and 1MB Flash (ImageNet)',
     },
-    'proxyless-w0.3': {
+    'proxyless-320kB': {
         'net_name': 'proxyless-w0.3-r176_imagenet',
         'description': 'scaled ProxylessNet that fits 320KB SRAM and 1MB Flash (ImageNet)'
     },
 
     ##### vww models ######
-    'mcunet-vww0': {
+    'mcunet-10fps-vww': {
         'net_name': 'mcunet-10fps_vww',
         'description': 'MCUNet model that runs 10fps on STM32F746 (VWW)'
     },
-    'mcunet-vww1': {
+    'mcunet-5fps-vww': {
         'net_name': 'mcunet-5fps_vww',
         'description': 'MCUNet model that runs 5fps on STM32F746 (VWW)'
     },
-    'mcunet-vww2': {
+    'mcunet-320kB-vww': {
         'net_name': 'mcunet-320kb-1mb_vww',
         'description': 'MCUNet model that fits 320KB SRAM and 1MB Flash (VWW)'
-    },
-
-    ##### detection demo model ######
-    # NOTE: we have tf-lite only for this model
-    'person-det': {
-        'net_name': 'person-det',
-        'description': 'person detection model used in our demo'
-    },
+    }
 }
 
 net_id_list = list(NET_INFO.keys())
 
-url_base = "https://hanlab18.mit.edu/projects/tinyml/mcunet/release/"
+url_base = "https://hanlab.mit.edu/projects/tinyml/mcunet/release/"
 
 
 def build_model(net_id, pretrained=True):

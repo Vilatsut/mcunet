@@ -9,11 +9,19 @@ import torch
 
 from ....utils import get_same_padding, sub_filter_start_end, make_divisible, SEModule
 
-__all__ = ['DynamicSeparableConv2d', 'DynamicPointConv2d', 'DynamicLinear', 'DynamicBatchNorm2d', 'DynamicSE']
+__all__ = [
+    "DynamicSeparableConv2d",
+    "DynamicPointConv2d",
+    "DynamicLinear",
+    "DynamicBatchNorm2d",
+    "DynamicSE",
+]
 
 
 class DynamicSeparableConv2d(nn.Module):
-    KERNEL_TRANSFORM_MODE = None  # None or 1
+    # Haotian: official version uses KERNEL_TRANSFORM_MODE=None,
+    # but the ckpt requires it to be 1
+    KERNEL_TRANSFORM_MODE = 1
 
     def __init__(self, max_in_channels, kernel_size_list, stride=1, dilation=1):
         super(DynamicSeparableConv2d, self).__init__()
@@ -24,8 +32,12 @@ class DynamicSeparableConv2d(nn.Module):
         self.dilation = dilation
 
         self.conv = nn.Conv2d(
-            self.max_in_channels, self.max_in_channels, max(self.kernel_size_list), self.stride,
-            groups=self.max_in_channels, bias=False,
+            self.max_in_channels,
+            self.max_in_channels,
+            max(self.kernel_size_list),
+            self.stride,
+            groups=self.max_in_channels,
+            bias=False,
         )
 
         self._ks_set = list(set(self.kernel_size_list))
@@ -37,8 +49,10 @@ class DynamicSeparableConv2d(nn.Module):
             for i in range(len(self._ks_set) - 1):
                 ks_small = self._ks_set[i]
                 ks_larger = self._ks_set[i + 1]
-                param_name = '%dto%d' % (ks_larger, ks_small)
-                scale_params['%s_matrix' % param_name] = Parameter(torch.eye(ks_small ** 2))
+                param_name = "%dto%d" % (ks_larger, ks_small)
+                scale_params["%s_matrix" % param_name] = Parameter(
+                    torch.eye(ks_small**2)
+                )
             for name, param in scale_params.items():
                 self.register_parameter(name, param)
 
@@ -51,7 +65,9 @@ class DynamicSeparableConv2d(nn.Module):
         start, end = sub_filter_start_end(max_kernel_size, kernel_size)
         filters = self.conv.weight[:out_channel, :in_channel, start:end, start:end]
         if self.KERNEL_TRANSFORM_MODE is not None and kernel_size < max_kernel_size:
-            start_filter = self.conv.weight[:out_channel, :in_channel, :, :]  # start with max kernel
+            start_filter = self.conv.weight[
+                :out_channel, :in_channel, :, :
+            ]  # start with max kernel
             for i in range(len(self._ks_set) - 1, 0, -1):
                 src_ks = self._ks_set[i]
                 if src_ks <= kernel_size:
@@ -60,13 +76,20 @@ class DynamicSeparableConv2d(nn.Module):
                 start, end = sub_filter_start_end(src_ks, target_ks)
                 _input_filter = start_filter[:, :, start:end, start:end]
                 _input_filter = _input_filter.contiguous()
-                _input_filter = _input_filter.view(_input_filter.size(0), _input_filter.size(1), -1)
+                _input_filter = _input_filter.view(
+                    _input_filter.size(0), _input_filter.size(1), -1
+                )
                 _input_filter = _input_filter.view(-1, _input_filter.size(2))
                 _input_filter = F.linear(
-                    _input_filter, self.__getattr__('%dto%d_matrix' % (src_ks, target_ks)),
+                    _input_filter,
+                    self.__getattr__("%dto%d_matrix" % (src_ks, target_ks)),
                 )
-                _input_filter = _input_filter.view(filters.size(0), filters.size(1), target_ks ** 2)
-                _input_filter = _input_filter.view(filters.size(0), filters.size(1), target_ks, target_ks)
+                _input_filter = _input_filter.view(
+                    filters.size(0), filters.size(1), target_ks**2
+                )
+                _input_filter = _input_filter.view(
+                    filters.size(0), filters.size(1), target_ks, target_ks
+                )
                 start_filter = _input_filter
             filters = start_filter
         return filters
@@ -79,15 +102,14 @@ class DynamicSeparableConv2d(nn.Module):
         filters = self.get_active_filter(in_channel, kernel_size).contiguous()
 
         padding = get_same_padding(kernel_size)
-        y = F.conv2d(
-            x, filters, None, self.stride, padding, self.dilation, in_channel
-        )
+        y = F.conv2d(x, filters, None, self.stride, padding, self.dilation, in_channel)
         return y
 
 
 class DynamicPointConv2d(nn.Module):
-
-    def __init__(self, max_in_channels, max_out_channels, kernel_size=1, stride=1, dilation=1):
+    def __init__(
+        self, max_in_channels, max_out_channels, kernel_size=1, stride=1, dilation=1
+    ):
         super(DynamicPointConv2d, self).__init__()
 
         self.max_in_channels = max_in_channels
@@ -97,7 +119,11 @@ class DynamicPointConv2d(nn.Module):
         self.dilation = dilation
 
         self.conv = nn.Conv2d(
-            self.max_in_channels, self.max_out_channels, self.kernel_size, stride=self.stride, bias=False,
+            self.max_in_channels,
+            self.max_out_channels,
+            self.kernel_size,
+            stride=self.stride,
+            bias=False,
         )
 
         self.active_out_channel = self.max_out_channels
@@ -114,7 +140,6 @@ class DynamicPointConv2d(nn.Module):
 
 
 class DynamicLinear(nn.Module):
-
     def __init__(self, max_in_features, max_out_features, bias=True):
         super(DynamicLinear, self).__init__()
 
@@ -162,9 +187,14 @@ class DynamicBatchNorm2d(nn.Module):
                     else:  # use exponential moving average
                         exponential_average_factor = bn.momentum
             return F.batch_norm(
-                x, bn.running_mean[:feature_dim], bn.running_var[:feature_dim], bn.weight[:feature_dim],
-                bn.bias[:feature_dim], bn.training or not bn.track_running_stats,
-                exponential_average_factor, bn.eps,
+                x,
+                bn.running_mean[:feature_dim],
+                bn.running_var[:feature_dim],
+                bn.weight[:feature_dim],
+                bn.bias[:feature_dim],
+                bn.training or not bn.track_running_stats,
+                exponential_average_factor,
+                bn.eps,
             )
 
     def forward(self, x):
@@ -174,26 +204,36 @@ class DynamicBatchNorm2d(nn.Module):
 
 
 class DynamicSE(SEModule):
-
-    def __init__(self, max_channel):
-        super(DynamicSE, self).__init__(max_channel)
+    def __init__(
+        self, max_channel, reduction=None, reduced_base_chs=None, divisor=None
+    ):
+        super(DynamicSE, self).__init__(
+            max_channel, reduction, reduced_base_chs, divisor
+        )
 
     def forward(self, x):
         in_channel = x.size(1)
-        num_mid = make_divisible(in_channel // self.reduction, divisor=8)
+        if self.reduced_base_chs is None:
+            num_mid = make_divisible(in_channel // self.reduction, divisor=8)
+        else:
+            num_mid = make_divisible(self.reduced_base_chs // self.reduction, divisor=1)
 
         y = x.mean(3, keepdim=True).mean(2, keepdim=True)
         # reduce
         reduce_conv = self.fc.reduce
         reduce_filter = reduce_conv.weight[:num_mid, :in_channel, :, :].contiguous()
-        reduce_bias = reduce_conv.bias[:num_mid] if reduce_conv.bias is not None else None
+        reduce_bias = (
+            reduce_conv.bias[:num_mid] if reduce_conv.bias is not None else None
+        )
         y = F.conv2d(y, reduce_filter, reduce_bias, 1, 0, 1, 1)
         # relu
         y = self.fc.relu(y)
         # expand
         expand_conv = self.fc.expand
         expand_filter = expand_conv.weight[:in_channel, :num_mid, :, :].contiguous()
-        expand_bias = expand_conv.bias[:in_channel] if expand_conv.bias is not None else None
+        expand_bias = (
+            expand_conv.bias[:in_channel] if expand_conv.bias is not None else None
+        )
         y = F.conv2d(y, expand_filter, expand_bias, 1, 0, 1, 1)
         # hard sigmoid
         y = self.fc.h_sigmoid(y)

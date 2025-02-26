@@ -3,13 +3,30 @@
 # International Conference on Learning Representations (ICLR), 2020.
 
 import math
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from .common_tools import min_divisible_value
 
-__all__ = ['MyModule', 'MyNetwork', 'init_models', 'set_bn_param', 'get_bn_param', 'replace_bn_with_gn',
-           'MyConv2d', 'replace_conv2d_with_my_conv2d']
+__all__ = [
+    "MyModule",
+    "MyNetwork",
+    "init_models",
+    "set_bn_param",
+    "get_bn_param",
+    "replace_bn_with_gn",
+    "MyConv2d",
+    "replace_conv2d_with_my_conv2d",
+    "torch_random_choices",
+]
+
+
+def torch_random_choices(src_list, generator, k=1):
+    rand_idx = torch.randint(low=0, high=len(src_list), generator=generator, size=(k,))
+    out_list = [src_list[i] for i in rand_idx]
+
+    return out_list[0] if k == 1 else out_list
 
 
 def set_bn_param(net, momentum, eps, gn_channel_per_group=None, ws_eps=None, **kwargs):
@@ -35,16 +52,16 @@ def get_bn_param(net):
     for m in net.modules():
         if isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm1d):
             return {
-                'momentum': m.momentum,
-                'eps': m.eps,
-                'ws_eps': ws_eps,
+                "momentum": m.momentum,
+                "eps": m.eps,
+                "ws_eps": ws_eps,
             }
         elif isinstance(m, nn.GroupNorm):
             return {
-                'momentum': None,
-                'eps': m.eps,
-                'gn_channel_per_group': m.num_channels // m.num_groups,
-                'ws_eps': ws_eps,
+                "momentum": None,
+                "eps": m.eps,
+                "gn_channel_per_group": m.num_channels // m.num_groups,
+                "ws_eps": ws_eps,
             }
     return None
 
@@ -57,8 +74,15 @@ def replace_bn_with_gn(model, gn_channel_per_group):
         to_replace_dict = {}
         for name, sub_m in m.named_children():
             if isinstance(sub_m, nn.BatchNorm2d):
-                num_groups = sub_m.num_features // min_divisible_value(sub_m.num_features, gn_channel_per_group)
-                gn_m = nn.GroupNorm(num_groups=num_groups, num_channels=sub_m.num_features, eps=sub_m.eps, affine=True)
+                num_groups = sub_m.num_features // min_divisible_value(
+                    sub_m.num_features, gn_channel_per_group
+                )
+                gn_m = nn.GroupNorm(
+                    num_groups=num_groups,
+                    num_channels=sub_m.num_features,
+                    eps=sub_m.eps,
+                    affine=True,
+                )
 
                 # load weight
                 gn_m.weight.data.copy_(sub_m.weight.data)
@@ -83,8 +107,14 @@ def replace_conv2d_with_my_conv2d(net, ws_eps=None):
                 to_update_dict[name] = sub_module
         for name, sub_module in to_update_dict.items():
             m._modules[name] = MyConv2d(
-                sub_module.in_channels, sub_module.out_channels, sub_module.kernel_size, sub_module.stride,
-                sub_module.padding, sub_module.dilation, sub_module.groups, sub_module.bias,
+                sub_module.in_channels,
+                sub_module.out_channels,
+                sub_module.kernel_size,
+                sub_module.stride,
+                sub_module.padding,
+                sub_module.dilation,
+                sub_module.groups,
+                sub_module.bias,
             )
             # load weight
             m._modules[name].load_state_dict(sub_module.state_dict())
@@ -98,11 +128,11 @@ def replace_conv2d_with_my_conv2d(net, ws_eps=None):
             m.WS_EPS = ws_eps
 
 
-def init_models(net, model_init='he_fout'):
+def init_models(net, model_init="he_fout"):
     """
-        Conv2d,
-        BatchNorm2d, BatchNorm1d, GroupNorm
-        Linear,
+    Conv2d,
+    BatchNorm2d, BatchNorm1d, GroupNorm
+    Linear,
     """
     if isinstance(net, list):
         for sub_net in net:
@@ -110,12 +140,12 @@ def init_models(net, model_init='he_fout'):
         return
     for m in net.modules():
         if isinstance(m, nn.Conv2d):
-            if model_init == 'he_fout':
+            if model_init == "he_fout":
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
-            elif model_init == 'he_fin':
+                m.weight.data.normal_(0, math.sqrt(2.0 / n))
+            elif model_init == "he_fin":
                 n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.weight.data.normal_(0, math.sqrt(2.0 / n))
             else:
                 raise NotImplementedError
             if m.bias is not None:
@@ -124,7 +154,7 @@ def init_models(net, model_init='he_fout'):
             m.weight.data.fill_(1)
             m.bias.data.zero_()
         elif isinstance(m, nn.Linear):
-            stdv = 1. / math.sqrt(m.weight.size(1))
+            stdv = 1.0 / math.sqrt(m.weight.size(1))
             m.weight.data.uniform_(-stdv, stdv)
             if m.bias is not None:
                 m.bias.data.zero_()
@@ -136,16 +166,41 @@ class MyConv2d(nn.Conv2d):
     https://github.com/joe-siyuan-qiao/WeightStandardization
     """
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, groups=1, bias=True):
-        super(MyConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias)
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        super(MyConv2d, self).__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+        )
         self.WS_EPS = None
 
     def weight_standardization(self, weight):
         if self.WS_EPS is not None:
-            weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
+            weight_mean = (
+                weight.mean(dim=1, keepdim=True)
+                .mean(dim=2, keepdim=True)
+                .mean(dim=3, keepdim=True)
+            )
             weight = weight - weight_mean
-            std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + self.WS_EPS
+            std = (
+                weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1)
+                + self.WS_EPS
+            )
             weight = weight / std.expand_as(weight)
         return weight
 
@@ -153,15 +208,21 @@ class MyConv2d(nn.Conv2d):
         if self.WS_EPS is None:
             return super(MyConv2d, self).forward(x)
         else:
-            return F.conv2d(x, self.weight_standardization(self.weight), self.bias,
-                            self.stride, self.padding, self.dilation, self.groups)
+            return F.conv2d(
+                x,
+                self.weight_standardization(self.weight),
+                self.bias,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.groups,
+            )
 
     def __repr__(self):
-        return super(MyConv2d, self).__repr__()[:-1] + ', ws_eps=%s)' % self.WS_EPS
+        return super(MyConv2d, self).__repr__()[:-1] + ", ws_eps=%s)" % self.WS_EPS
 
 
 class MyModule(nn.Module):
-
     def forward(self, x):
         raise NotImplementedError
 
@@ -211,28 +272,31 @@ class MyNetwork(MyModule):
     def get_bn_param(self):
         return get_bn_param(self)
 
-    def get_parameters(self, keys=None, mode='include'):
+    def get_parameters(self, keys=None, mode="include"):
         if keys is None:
             for name, param in self.named_parameters():
-                if param.requires_grad: yield param
-        elif mode == 'include':
+                if param.requires_grad:
+                    yield param
+        elif mode == "include":
             for name, param in self.named_parameters():
                 flag = False
                 for key in keys:
                     if key in name:
                         flag = True
                         break
-                if flag and param.requires_grad: yield param
-        elif mode == 'exclude':
+                if flag and param.requires_grad:
+                    yield param
+        elif mode == "exclude":
             for name, param in self.named_parameters():
                 flag = True
                 for key in keys:
                     if key in name:
                         flag = False
                         break
-                if flag and param.requires_grad: yield param
+                if flag and param.requires_grad:
+                    yield param
         else:
-            raise ValueError('do not support: %s' % mode)
+            raise ValueError("do not support: %s" % mode)
 
     def weight_parameters(self):
         return self.get_parameters()
