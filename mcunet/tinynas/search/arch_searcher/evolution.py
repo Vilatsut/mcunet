@@ -1,3 +1,8 @@
+from tqdm import tqdm
+import numpy as np
+import copy
+import random
+
 class EvolutionSearcher:
     def __init__(self, efficiency_predictor, accuracy_predictor, **kwargs):
         self.efficiency_predictor = efficiency_predictor
