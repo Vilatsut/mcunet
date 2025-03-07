@@ -117,26 +117,21 @@ class Hsigmoid(nn.Module):
 class SEModule(nn.Module):
     REDUCTION = 4
 
-    def __init__(self, channel, reduction=None, reduced_base_chs=None, divisor=None):
+    def __init__(self, channel, reduction=None):
         super(SEModule, self).__init__()
 
         self.channel = channel
         self.reduction = SEModule.REDUCTION if reduction is None else reduction
-        self.reduced_base_chs = reduced_base_chs
 
         num_mid = make_divisible(
-            (reduced_base_chs or channel) // self.reduction,
-            divisor=divisor or MyNetwork.CHANNEL_DIVISIBLE,
+            self.channel // self.reduction, divisor=MyNetwork.CHANNEL_DIVISIBLE
         )
 
         self.fc = nn.Sequential(
             OrderedDict(
                 [
                     ("reduce", nn.Conv2d(self.channel, num_mid, 1, 1, 0, bias=True)),
-                    (
-                        "relu",
-                        nn.ReLU6(inplace=True),
-                    ),  # TODO: temporarily change to ReLU6 for easier quantization
+                    ("relu", nn.ReLU(inplace=True)),
                     ("expand", nn.Conv2d(num_mid, self.channel, 1, 1, 0, bias=True)),
                     ("h_sigmoid", Hsigmoid(inplace=True)),
                 ]
