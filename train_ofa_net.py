@@ -45,6 +45,8 @@ args = parser.parse_args()
 
 AuroraDataProvider.DEFAULT_PATH = args.data_path
 
+args.kd_ratio = 0.9
+
 if args.task == "kernel":
     args.path = args.output_path + "/normal2kernel"
     args.dynamic_batch_size = 1
@@ -77,6 +79,7 @@ elif args.task == "depth":
 elif args.task == "expand":
     args.path = args.output_path + "/kernel_depth2kernel_depth_width/phase%d" % args.phase
     args.dynamic_batch_size = 4
+
     if args.phase == 1:
         args.n_epochs = 25
         args.base_lr = 2.5e-3
@@ -103,6 +106,7 @@ elif args.task == "teacher":
     args.ks_list = "7"
     args.expand_list = "6"
     args.depth_list = "4"
+    args.kd_ratio = 0.0
 
 else:
     raise NotImplementedError
@@ -140,7 +144,6 @@ args.width_mult_list = "1.3"
 args.dy_conv_scaling_mode = 1
 args.independent_distributed_sampling = False
 
-args.kd_ratio = 1.0
 args.kd_type = "ce"
 
 
