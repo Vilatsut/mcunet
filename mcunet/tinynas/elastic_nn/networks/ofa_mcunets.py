@@ -407,7 +407,7 @@ class OFAMCUNets(MCUNets):
             depth_setting.append(d)
 
         # sample width_mult, move to last to keep the same randomness
-        width_mult_setting = sample_function(self.width_mult_list)
+        width_mult_setting = sample_function(range(0, len(self.width_mult_list)))
 
         self.set_active_subnet(
             width_mult_setting, ks_setting, expand_setting, depth_setting
