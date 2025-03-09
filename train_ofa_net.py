@@ -263,7 +263,7 @@ if __name__ == "__main__":
     validate_func_dict = {
         "image_size_list": {224}
         if isinstance(args.image_size, int)
-        else sorted({160, 224}),
+        else sorted({64, 96, 128, 160, 224}),
         "ks_list": sorted({min(args.ks_list), max(args.ks_list)}),
         "expand_ratio_list": sorted({min(args.expand_list), max(args.expand_list)}),
         "depth_list": sorted({min(net.depth_list), max(net.depth_list)}),
