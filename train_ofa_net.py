@@ -224,12 +224,12 @@ if __name__ == "__main__":
         args.teacher_model = OFAMCUNets(
             n_classes=run_config.data_provider.n_classes,
             bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=0.0,
+            dropout_rate=args.dropout,
             base_stage_width=args.base_stage_width,
-            width_mult_list=1.3,
-            ks_list=7,
-            expand_ratio_list=6,
-            depth_list=4,
+            width_mult_list=args.width_mult_list,
+            ks_list=args.ks_list,
+            expand_ratio_list=args.expand_list,
+            depth_list=args.depth_list,
         )
         args.teacher_model.cuda()
 
