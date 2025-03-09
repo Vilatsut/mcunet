@@ -99,7 +99,7 @@ elif args.task == "expand":
 elif args.task == "teacher":
     args.path = args.output_path + "/teacher"
     args.dynamic_batch_size = 1
-    args.n_epochs = 120
+    args.n_epochs = 1
     args.base_lr = 3e-2
     args.warmup_epochs = 5
     args.warmup_lr = -1
@@ -224,12 +224,12 @@ if __name__ == "__main__":
         args.teacher_model = OFAMCUNets(
             n_classes=run_config.data_provider.n_classes,
             bn_param=(args.bn_momentum, args.bn_eps),
-            dropout_rate=args.dropout,
+            dropout_rate=0.0,
             base_stage_width=args.base_stage_width,
-            width_mult_list=args.width_mult_list,
-            ks_list=args.ks_list,
-            expand_ratio_list=args.expand_list,
-            depth_list=args.depth_list,
+            width_mult_list=1.3,
+            ks_list=7,
+            expand_ratio_list=6,
+            depth_list=4,
         )
         args.teacher_model.cuda()
 
