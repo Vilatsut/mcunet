@@ -57,7 +57,7 @@ def label_smooth(target, n_classes: int, label_smoothing=0.1):
 
 def cross_entropy_loss_with_soft_target(pred, soft_target):
     logsoftmax = nn.LogSoftmax()
-    return torch.mean(torch.sum(-soft_target * logsoftmax(pred, dim=1), 1))
+    return torch.mean(torch.sum(-soft_target * logsoftmax(pred), 1))
 
 
 def cross_entropy_with_label_smoothing(pred, target, label_smoothing=0.1):
