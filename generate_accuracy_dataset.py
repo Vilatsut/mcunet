@@ -5,6 +5,7 @@ import json
 import torch
 import argparse
 
+from mcunet.tinynas.data_providers.aurora import AuroraDataProvider
 from mcunet.tinynas.elastic_nn.networks.ofa_mcunets import OFAMCUNets
 from mcunet.utils.mcunet_eval_helper import build_val_data_loader, calib_bn, validate
 
@@ -37,7 +38,7 @@ def main():
     parser.add_argument(
         "-j",
         "--workers",
-        default=8,
+        default=4,
         type=int,
         metavar="N",
         help="number of data loading workers",
@@ -78,11 +79,17 @@ def main():
         cfg = ofa_network.sample_active_subnet()
         ofa_network.set_active_subnet(**cfg)
         subnet = ofa_network.get_active_subnet().cuda()
-        calib_bn(subnet, args.data_dir, args.batch_size, args.resolution)
-        # important: split needs to be 1.
-        val_loader = build_val_data_loader(
-            args.data_dir, args.resolution, args.batch_size, split=1
+
+        aurora_dataprovider = AuroraDataProvider(
+            data_path=args.data_dir,
+            image_size=args.resolution,
+            test_batch_size=args.batch_size,
+            n_worker=args.workers,
+            seed=2
         )
+        val_loader = aurora_dataprovider.test
+
+        calib_bn(subnet, args.data_dir, args.batch_size, args.resolution)
         acc = validate(subnet, val_loader)
         cfg["image_size"] = args.resolution
         all_results.append((cfg, acc))
