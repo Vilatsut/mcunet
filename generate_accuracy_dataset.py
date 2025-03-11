@@ -4,7 +4,6 @@ import json
 
 import torch
 import argparse
-from torchpack import distributed as dist
 
 from mcunet.tinynas.elastic_nn.networks.ofa_mcunets import OFAMCUNets
 from mcunet.utils.mcunet_eval_helper import build_val_data_loader, calib_bn, validate
@@ -15,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser()
     # data loader setting
     parser.add_argument(
-        "--resolution", default=32, type=int, choices=[32, 64, 96, 128, 144, 160]
+        "--resolution", default=160, type=int, choices=[32, 64, 96, 128, 144, 160]
     )
     parser.add_argument(
         "--data-dir",
