@@ -18,7 +18,7 @@ def main():
     )
     parser.add_argument(
         "--supernet-dir",
-        default=os.path.expanduser("supernet"),
+        default=os.path.expanduser("vww_supernet.pth"),
         help="path to the supernet checkpoint",
     )
     parser.add_argument(
