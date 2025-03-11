@@ -15,11 +15,11 @@ def main():
     parser = argparse.ArgumentParser()
     # data loader setting
     parser.add_argument(
-        "--resolution", default=96, type=int, choices=[96, 112, 128, 144, 160]
+        "--resolution", default=32, type=int, choices=[32, 64, 96, 128, 144, 160]
     )
     parser.add_argument(
         "--data-dir",
-        default=os.path.expanduser("data/vww-s256/val"),
+        default=os.path.expanduser("data/"),
         help="path to ImageNet validation data",
     )
     parser.add_argument(
@@ -40,8 +40,8 @@ def main():
     )
 
     args = parser.parse_args()
-    dist.init()
-    device_id = dist.local_rank()
+
+    device_id = torch.cuda.current_device()
     torch.cuda.set_device(device_id)
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -49,16 +49,13 @@ def main():
 
     ofa_network = OFAMCUNets(
         n_classes=2,
-        bn_param=(0.1, 1e-3),
+        bn_param=(0.1, 1e-5),
         dropout_rate=0.0,
-        base_stage_width="mcunet384",
-        width_mult_list=[0.5, 0.75, 1.0],
+        base_stage_width="proxyless",
+        width_mult_list=[1.3],
         ks_list=[3, 5, 7],
         expand_ratio_list=[3, 4, 6],
-        depth_list=[0, 1, 2],
-        base_depth=(1, 2, 2, 2, 2),
-        fuse_blk1=True,
-        se_stages=[False, [False, True, True, True], True, True, True, False],
+        depth_list=[2, 3, 4],
     )
 
     ofa_network.load_state_dict(
