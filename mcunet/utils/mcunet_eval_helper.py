@@ -14,10 +14,10 @@ from mcunet.utils import (
 __all__ = ["build_val_data_loader", "calib_bn", "validate"]
 
 
-def build_val_data_loader(data_dir, resolution, batch_size=128, split=0):
+def build_val_data_loader(data_dir, resolution, batch_size=128, split=0, dataset_mean=[0.23280394, 0.24616548, 0.26092353], dataset_std=[0.16994016, 0.17286949, 0.16250615]):
     # split = 1: real val set, split = 1: holdout validation set
     assert split in [0, 1]
-    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    normalize = transforms.Normalize(mean=dataset_mean, std=dataset_std)
     kwargs = {"num_workers": min(8, os.cpu_count()), "pin_memory": False}
 
     val_transform = transforms.Compose(
