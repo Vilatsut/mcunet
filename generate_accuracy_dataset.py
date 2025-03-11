@@ -17,6 +17,11 @@ def main():
         "--resolution", default=160, type=int, choices=[32, 64, 96, 128, 144, 160]
     )
     parser.add_argument(
+        "--supernet-dir",
+        default=os.path.expanduser("supernet"),
+        help="path to the supernet checkpoint",
+    )
+    parser.add_argument(
         "--data-dir",
         default=os.path.expanduser("data/"),
         help="path to ImageNet validation data",
@@ -58,7 +63,7 @@ def main():
     )
 
     ofa_network.load_state_dict(
-        torch.load("vww_supernet.pth", map_location="cpu")["state_dict"], strict=True
+        torch.load(args.supernet_dir, map_location="cpu")["state_dict"], strict=True
     )
 
     ofa_network = ofa_network.to("cuda:%d" % device_id)
