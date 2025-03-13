@@ -301,6 +301,7 @@ def count_peak_activation_size(net, data_shape=(1, 3, 224, 224)):
     if isinstance(net, nn.DataParallel):
         net = net.module
     net = copy.deepcopy(net)
+    net.eval()
 
     from ..tinynas.nn.networks import MCUNets
 

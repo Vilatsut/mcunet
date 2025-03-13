@@ -1,6 +1,7 @@
 import argparse
 import json
 from tqdm import tqdm
+from mcunet.tinynas.data_providers.aurora import AuroraDataProvider
 from mcunet.tinynas.search.efficiency_predictor.analytical import (
     AnalyticalEfficiencyPredictor,
 )
@@ -15,7 +16,7 @@ from mcunet.tinynas.search.accuracy_predictor import (
 
 # from mcunet.tinynas.search.efficiency_predictor import MACSPredictor
 from mcunet.tinynas.search.arch_searcher import EvolutionSearcher
-from mcunet.tinynas.elastic_nn.networks.ofa_proxyless_w import OFAProxylessNASNets
+from mcunet.tinynas.elastic_nn.networks import OFAMCUNets
 
 from mcunet.utils.mcunet_eval_helper import build_val_data_loader, calib_bn, validate
 
@@ -24,34 +25,32 @@ def main():
     data_dir = "data/vww-s256/val"
     device = "cuda:0"
 
-    ofa_network = OFAProxylessNASNets(
+    ofa_network = OFAMCUNets(
         n_classes=2,
-        bn_param=(0.1, 1e-3),
+        bn_param=(0.1, 1e-5),
         dropout_rate=0.0,
-        base_stage_width="proxyless384",
-        width_mult_list=[0.5, 0.75, 1.0],
+        base_stage_width="proxyless",
+        width_mult_list=[1.3],
         ks_list=[3, 5, 7],
         expand_ratio_list=[3, 4, 6],
-        depth_list=[0, 1, 2],
-        base_depth=[1, 2, 2, 2, 2],
-        fuse_blk1=True,
-        se_stages=[False, [False, True, True, True], True, True, True, False],
+        depth_list=[2, 3, 4],
+        base_depth=[2, 2, 2, 2, 2]
     )
 
     ofa_network.load_state_dict(
-        torch.load("vww_supernet.pth", map_location="cpu")["state_dict"], strict=True
+        torch.load("pretrained\supernet.pth", map_location="cpu")["state_dict"], strict=True
     )
 
     ofa_network = ofa_network.cuda()
-
-    image_size_list = [96, 112, 128, 144, 160]
+    
+    image_size_list = [32, 64, 96, 128, 144, 160]
     arch_encoder = MCUNetArchEncoder(
-        image_size_list=image_size_list,
-        base_depth=ofa_network.base_depth,
-        depth_list=ofa_network.depth_list,
-        expand_list=ofa_network.expand_ratio_list,
-        width_mult_list=ofa_network.width_mult_list,
-    )
+            image_size_list=image_size_list,
+            base_depth=list(ofa_network.base_depth),
+            depth_list=ofa_network.depth_list,
+            expand_list=ofa_network.expand_ratio_list,
+            width_mult_list=ofa_network.width_mult_list,
+        )
     os.makedirs("pretrained", exist_ok=True)
     acc_pred_checkpoint_path = (
         f"pretrained/{ofa_network.__class__.__name__}_acc_predictor.pth"
@@ -66,15 +65,24 @@ def main():
         device=device,
     )
     efficiency_predictor = AnalyticalEfficiencyPredictor(ofa_network)
+    evolution_params = {
+        'arch_mutate_prob': 0.15,
+        'resolution_mutate_prob': 0.15,
+        'population_size': 10,
+        'max_time_budget': 100,
+        'parent_ratio': 0.1,
+        'mutation_ratio': 0.1,
+    }
     nas_agent = EvolutionSearcher(
-        efficiency_predictor, acc_predictor, population_size=30, max_time_budget=10
+        efficiency_predictor, acc_predictor, **evolution_params
     )
 
     # train accuracy predictor
     if not os.path.exists(acc_pred_checkpoint_path):
         acc_dataset = AccuracyDataset("acc_datasets")
         train_loader, valid_loader, base_acc = acc_dataset.build_acc_data_loader(
-            arch_encoder=arch_encoder
+            arch_encoder=arch_encoder,
+            n_workers=4
         )
         criterion = torch.nn.L1Loss().to(device)
         optimizer = torch.optim.Adam(acc_predictor.parameters())
@@ -104,7 +112,7 @@ def main():
         torch.save(acc_predictor.cpu().state_dict(), acc_pred_checkpoint_path)
 
     # search
-    search_constraint = dict(flops=100.0, peak_memory=256.0)
+    search_constraint = dict(flops=100.0, peak_memory=512.0)
     best_valids, best_info = nas_agent.run_evolution_search(
         constraint=search_constraint, verbose=True
     )
@@ -113,7 +121,15 @@ def main():
     # validate
     subnet = ofa_network.get_active_subnet().cuda()
     calib_bn(subnet, data_dir, 128, best_info[1]["image_size"])
-    val_loader = build_val_data_loader(data_dir, best_info[1]["image_size"], 128)
+    # val_loader = build_val_data_loader(data_dir, best_info[1]["image_size"], 128)
+    aurora_dataprovider = AuroraDataProvider(
+            data_path=data_dir,
+            image_size=best_info[1]["image_size"],
+            test_batch_size=128,
+            n_worker=4,
+            seed=2
+    )
+    val_loader = aurora_dataprovider.test
     acc = validate(subnet, val_loader)
     print(acc)
 
