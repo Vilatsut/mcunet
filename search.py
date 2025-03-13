@@ -22,7 +22,7 @@ from mcunet.utils.mcunet_eval_helper import build_val_data_loader, calib_bn, val
 
 
 def main():
-    data_dir = "data/vww-s256/val"
+    data_dir = "data"
     device = "cuda:0"
 
     ofa_network = OFAMCUNets(
@@ -113,10 +113,10 @@ def main():
 
     # search
     search_constraint = dict(flops=100.0, peak_memory=512.0)
-    best_valids, best_info = nas_agent.run_evolution_search(
+    best_info = nas_agent.run_evolution_search(
         constraint=search_constraint, verbose=True
     )
-    print(best_valids, best_info)
+    print(best_info)
 
     # validate
     subnet = ofa_network.get_active_subnet().cuda()
