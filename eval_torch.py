@@ -9,8 +9,10 @@ import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import torch.utils.data.distributed
 from torchvision import datasets, transforms
+import matplotlib.pyplot as plt
+from torchvision.utils import make_grid
 
-from mcunet.model_zoo import build_model
+from mcunet.tinynas.data_providers.aurora import AuroraDataProvider
 from mcunet.utils import (
     AverageMeter,
     accuracy,
@@ -28,7 +30,7 @@ parser.add_argument("--net_id", type=str, help="net id of the model")
 parser.add_argument("--dataset", default="vww", type=str, choices=["imagenet", "vww"])
 parser.add_argument(
     "--data-dir",
-    default=os.path.expanduser("data/vww-s256/val"),
+    default=os.path.expanduser("data/"),
     help="path to ImageNet validation data",
 )
 parser.add_argument(
@@ -37,7 +39,7 @@ parser.add_argument(
 parser.add_argument(
     "-j",
     "--workers",
-    default=8,
+    default=4,
     type=int,
     metavar="N",
     help="number of data loading workers",
@@ -50,7 +52,7 @@ device = "cuda"
 
 
 def build_val_data_loader(resolution):
-    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    normalize = transforms.Normalize(mean=[0.23280394, 0.24616548, 0.26092353], std=[0.16994016, 0.17286949, 0.16250615])
     kwargs = {"num_workers": args.workers, "pin_memory": True}
 
     if args.dataset == "imagenet":
@@ -76,14 +78,14 @@ def build_val_data_loader(resolution):
         raise NotImplementedError
     val_dataset = datasets.ImageFolder(args.data_dir, transform=val_transform)
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False, **kwargs
+        val_dataset, batch_size=args.batch_size, shuffle=True, **kwargs
     )
     return val_loader
 
 
 def calib_bn(net, resolution, batch_size, num_images=2000):
     # print('Creating dataloader for resetting BN running statistics...')
-    normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+    normalize = transforms.Normalize(mean=[0.23280394, 0.24616548, 0.26092353], std=[0.16994016, 0.17286949, 0.16250615])
     dataset = datasets.ImageFolder(
         args.data_dir,
         transforms.Compose(
@@ -102,7 +104,7 @@ def calib_bn(net, resolution, batch_size, num_images=2000):
         dataset,
         # sampler=sub_sampler,
         batch_size=batch_size,
-        num_workers=16,
+        num_workers=4,
         pin_memory=True,
         drop_last=False,
     )
@@ -120,8 +122,8 @@ def validate(model, val_loader):
                 data, target = data.to(device), target.to(device)
 
                 output = model(data)
-                val_loss.update(F.cross_entropy(output, target).item())
-                top1 = accuracy(output, target, topk=(1,))[0]
+                val_loss.update(F.cross_entropy(output, 1-target).item())
+                top1 = accuracy(output, 1-target, topk=(1,))[0]
                 val_top1.update(top1.item(), n=data.shape[0])
                 t.set_postfix({"loss": val_loss.avg, "top1": val_top1.avg})
                 t.update(1)
@@ -148,25 +150,22 @@ def main():
     print(" * Accuracy: {:.2f}%".format(acc))
     """
 
-    from mcunet.tinynas.elastic_nn.networks.ofa_proxyless_w import OFAProxylessNASNets
+    from mcunet.tinynas.elastic_nn.networks import OFAMCUNets
 
-    ofa_network = OFAProxylessNASNets(
+    ofa_network = OFAMCUNets(
         n_classes=2,
         bn_param=(0.1, 1e-3),
         dropout_rate=0.0,
-        base_stage_width="proxyless384",
-        width_mult_list=[0.5, 0.75, 1.0],
+        base_stage_width="proxyless",
+        width_mult_list=[1.3],
         ks_list=[3, 5, 7],
         expand_ratio_list=[3, 4, 6],
-        depth_list=[0, 1, 2],
-        base_depth=(1, 2, 2, 2, 2),
-        fuse_blk1=True,
-        se_stages=[False, [False, True, True, True], True, True, True, False],
+        depth_list=[2, 3, 4],
     )
-    resolution = 96
+    resolution = 224
 
     ofa_network.load_state_dict(
-        torch.load("vww_supernet.pth", map_location="cpu")["state_dict"], strict=True
+        torch.load("pretrained/supernet.pth", map_location="cpu")["state_dict"], strict=True
     )
 
     # cfg = ofa_network.sample_active_subnet()
@@ -186,8 +185,30 @@ def main():
     subnet = ofa_network.get_active_subnet().to(device)
     calib_bn(subnet, resolution, batch_size=100)
     val_loader = build_val_data_loader(resolution)
-    top1 = validate(subnet, val_loader)
-    print(top1)
+
+    data_iter = iter(val_loader)
+    images, labels = next(data_iter)  # Get a batch
+    mean = torch.tensor([0.23280394, 0.24616548, 0.26092353]).view(3, 1, 1)  # Adjust based on dataset
+    std = torch.tensor([0.16994016, 0.17286949, 0.16250615]).view(3, 1, 1)
+    images = images * std + mean  # Undo normalization
+    
+    grid = make_grid(images[:16], nrow=4, normalize=False)
+    
+    plt.figure(figsize=(8, 8))
+    plt.imshow(grid.permute(1, 2, 0))  # Convert CHW to HWC format
+    plt.axis('off')
+
+    plt.text(
+        x=(0 % 4) * 4 // 4 + 5,  # Positioning text based on grid
+        y=(0 // 4) * 4 // 4 + 5,  # Positioning text based on grid
+        s=str(labels[0].item()),  # Display label
+        color='white',
+        fontsize=40,
+        weight='bold'
+    )
+    plt.show()
+    # top1 = validate(subnet, val_loader)
+    # print(top1)
 
 
 if __name__ == "__main__":

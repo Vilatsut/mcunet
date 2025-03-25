@@ -1,8 +1,14 @@
+import os
 import math
+from pathlib import Path
+from typing import Union, Callable, Optional, Tuple, List, Dict
 
+import torch
+from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SubsetRandomSampler
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from torch.utils.data import DataLoader, DistributedSampler, RandomSampler, SubsetRandomSampler
+from sklearn.model_selection import train_test_split
+from PIL import Image
 
 from .base_provider import DataProvider
 from mcunet.utils.my_dataloader import MyRandomResizedCrop, MyDistributedSampler
@@ -11,7 +17,7 @@ from mcunet.utils.my_dataloader.my_data_loader import MyDataLoader
 __all__ = ["AuroraDataProvider", "AuroraDataset"]
 
 class AuroraDataProvider(DataProvider):
-    DEFAULT_PATH = "/home/vilatsut/Desktop/archive"
+    DEFAULT_PATH = "./data"
 
     def __init__(
         self,
@@ -267,13 +273,7 @@ class AuroraDataProvider(DataProvider):
         return self.__dict__["sub_train_%d" % self.active_img_size]
 
 
-from sklearn.model_selection import train_test_split
-import torch
-from torchvision import datasets
-from typing import Union, Callable, Optional, Tuple, List
-from pathlib import Path
-from PIL import Image
-import os
+
 
 class AuroraDataset(datasets.VisionDataset):
     """
@@ -411,3 +411,11 @@ class AuroraDataset(datasets.VisionDataset):
     
     def __len__(self) -> int:
         return len(self.data)
+
+    @property
+    def class_to_idx(self) -> Dict[str, int]:
+        """Mapping of class names to indices."""
+        return {cls_name: idx for idx, cls_name in enumerate(self.classes)}
+
+    def extra_repr(self) -> str:
+        return f"Classes: {self.classes}"

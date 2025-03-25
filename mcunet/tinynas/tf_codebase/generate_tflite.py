@@ -26,7 +26,7 @@ def generate_tflite_with_weight(pt_model, resolution, tflite_fname, calib_loader
         with tf.Session() as sess:
             def network_map(images):
                 net_config = pt_model.config
-                from .tf_modules import ProxylessNASNets
+                from mcunet.tinynas.tf_codebase.tf_modules import ProxylessNASNets
                 net_tf = ProxylessNASNets(net_config=net_config, net_weights=tf_sd,
                                           n_classes=pt_model.classifier.linear.out_features,
                                           graph=graph, sess=sess, is_training=False,
@@ -74,7 +74,7 @@ def generate_tflite_with_weight(pt_model, resolution, tflite_fname, calib_loader
 
 
 if __name__ == '__main__':
-    # a simple script to convert the model to
+    # a simple script to convert the model to TfLite format
     import sys
     sys.path.append('')
     import json
@@ -82,25 +82,27 @@ if __name__ == '__main__':
     cfg_path = sys.argv[1]
     ckpt_path = sys.argv[2]
     tflite_path = sys.argv[3]
-    from mcunet.tinynas.nn import ProxylessNASNets
+    from mcunet.tinynas.nn.networks import MCUNets
 
     cfg = json.load(open(cfg_path))
-    model = ProxylessNASNets.build_from_config(cfg)
+    model = MCUNets.build_from_config(cfg)
     if ckpt_path != 'None':
         sd = torch.load(ckpt_path, map_location='cpu')
-        model.load_state_dict(sd['state_dict'])
+        model.load_state_dict(sd)
 
     # prepare calib loader
     # calibrate the model for quantization
     from torchvision import datasets, transforms
-    train_dataset = datasets.ImageFolder('/dataset/imagenet/train',
+    dataset_mean = [0.23280394, 0.24616548, 0.26092353]
+    dataset_std = [0.16994016, 0.17286949, 0.16250615]
+    train_dataset = datasets.ImageFolder('data',
                                          transform=transforms.Compose([
                                              # transforms.Resize(int(resolution * 256 / 224)),
                                              # transforms.CenterCrop(resolution),
                                              transforms.RandomResizedCrop(cfg['resolution']),
                                              transforms.RandomHorizontalFlip(),
                                              transforms.ToTensor(),
-                                             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                                             transforms.Normalize(mean=dataset_mean, std=dataset_std)
                                          ]))
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=1,

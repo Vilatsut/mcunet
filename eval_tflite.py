@@ -3,19 +3,19 @@ import argparse
 import numpy as np
 from multiprocessing import Pool
 from tqdm import tqdm
+import math
 
 import torch
 from torchvision import datasets, transforms
+
 import tensorflow as tf
 
-from mcunet.model_zoo import download_tflite
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # use only cpu for tf-lite evaluation
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--net_id', type=str, help='net id of the model')
 # dataset args.
 parser.add_argument('--dataset', default='imagenet', type=str)
 parser.add_argument('--data-dir', default='/dataset/imagenet/val',
@@ -42,12 +42,23 @@ def get_val_dataset(resolution):
             transforms.Resize((resolution, resolution)),  # if center crop, the person might be excluded
             transforms.ToTensor(),
         ])
+    elif args.dataset == 'aurora':
+        dataset_mean = [0.23280394, 0.24616548, 0.26092353]
+        dataset_std = [0.16994016, 0.17286949, 0.16250615]
+        val_transform = transforms.Compose([
+            transforms.PILToTensor(),
+            transforms.ConvertImageDtype(torch.uint8),
+            transforms.Resize(int(math.ceil(resolution / 0.875))),
+            transforms.CenterCrop(resolution),            
+            transforms.ConvertImageDtype(torch.float32),
+            transforms.Normalize(dataset_mean, dataset_std)
+        ])
     else:
         raise NotImplementedError
     val_dataset = datasets.ImageFolder(args.data_dir, transform=val_transform)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size,
-        shuffle=False, **kwargs)
+        shuffle=True, **kwargs)
     return val_loader
 
 
@@ -67,18 +78,18 @@ def eval_image(data):
     is_correct = torch.argmax(output, dim=1).item() == target.item()
     return is_correct
 
+tflite_path = "./output.tflite"
+interpreter = tf.lite.Interpreter(tflite_path)
+interpreter.allocate_tensors()
+# get input & output tensors
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+input_shape = input_details[0]['shape']
+resolution = input_shape[1]
 
 if __name__ == '__main__':
-    tflite_path = download_tflite(net_id=args.net_id)
-    interpreter = tf.lite.Interpreter(tflite_path)
-    interpreter.allocate_tensors()
 
-    # get input & output tensors
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
 
-    input_shape = input_details[0]['shape']
-    resolution = input_shape[1]
 
     # we first cache the whole test set into memory for faster data loading
     # it can reduce the testing time from ~20min to ~2min in my experiment
@@ -93,7 +104,7 @@ if __name__ == '__main__':
     print(' * dataset size:', len(val_loader_cache))
 
     # use multi-processing for faster evaluation
-    n_thread = 32
+    n_thread = 16
 
     p = Pool(n_thread)
     correctness = []
