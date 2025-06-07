@@ -67,6 +67,8 @@ class AccuracyDataset:
                 t.update()
         base_acc = np.mean(Y_all)
         # convert to torch tensor
+        X_all = np.array(X_all, dtype=np.float32)
+        Y_all = np.array(Y_all, dtype=np.float32)
         X_all = torch.tensor(X_all, dtype=torch.float)
         Y_all = torch.tensor(Y_all)
 

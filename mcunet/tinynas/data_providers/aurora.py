@@ -192,7 +192,6 @@ class AuroraDataProvider(DataProvider):
 
         return transforms.Compose([
             transforms.PILToTensor(),
-            transforms.ConvertImageDtype(torch.uint8),
             resize_transform_class(image_size, scale=(self.resize_scale, 1.0)),
             transforms.RandomHorizontalFlip(),
             color_transform,
@@ -205,7 +204,6 @@ class AuroraDataProvider(DataProvider):
             image_size = self.active_img_size
         return transforms.Compose([
             transforms.PILToTensor(),
-            transforms.ConvertImageDtype(torch.uint8),
             transforms.Resize(int(math.ceil(image_size / 0.875))),
             transforms.CenterCrop(image_size),            
             transforms.ConvertImageDtype(torch.float32),
