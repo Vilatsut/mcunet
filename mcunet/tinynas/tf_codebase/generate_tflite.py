@@ -23,7 +23,7 @@ def generate_tflite_with_weight(pt_model, resolution, tflite_fname, calib_loader
     weight_decay = 0.
 
     with tf.Graph().as_default() as graph:
-        with tf.Session() as sess:
+        with tf.compat.v1.Session() as sess:
             def network_map(images):
                 net_config = pt_model.config
                 from mcunet.tinynas.tf_codebase.tf_modules import ProxylessNASNets
@@ -48,7 +48,7 @@ def generate_tflite_with_weight(pt_model, resolution, tflite_fname, calib_loader
                     return network_map(images)
 
             input_shape = [1, resolution, resolution, 3]
-            placeholder = tf.placeholder(name='input', dtype=tf.float32, shape=input_shape)
+            placeholder = tf.compat.v1.placeholder(name='input', dtype=tf.float32, shape=input_shape)
 
             out, _ = network_fn(placeholder)
 
@@ -70,7 +70,7 @@ def generate_tflite_with_weight(pt_model, resolution, tflite_fname, calib_loader
             converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
 
             tflite_buffer = converter.convert()
-            tf.gfile.GFile(tflite_fname, "wb").write(tflite_buffer)
+            tf.io.gfile.GFile(tflite_fname, "wb").write(tflite_buffer)
 
 
 if __name__ == '__main__':
@@ -79,9 +79,9 @@ if __name__ == '__main__':
     sys.path.append('')
     import json
 
-    cfg_path = sys.argv[1]
-    ckpt_path = sys.argv[2]
-    tflite_path = sys.argv[3]
+    cfg_path = "cfg_20250607_170204.json"
+    ckpt_path = "subnet_20250607_170204.pth"
+    tflite_path = "tflite_model.tflite"
     from mcunet.tinynas.nn.networks import MCUNets
 
     cfg = json.load(open(cfg_path))
@@ -99,7 +99,8 @@ if __name__ == '__main__':
                                          transform=transforms.Compose([
                                              # transforms.Resize(int(resolution * 256 / 224)),
                                              # transforms.CenterCrop(resolution),
-                                             transforms.RandomResizedCrop(cfg['resolution']),
+                                             #transforms.RandomResizedCrop(cfg['resolution']),
+                                             transforms.Resize(cfg['resolution']),
                                              transforms.RandomHorizontalFlip(),
                                              transforms.ToTensor(),
                                              transforms.Normalize(mean=dataset_mean, std=dataset_std)
@@ -110,4 +111,4 @@ if __name__ == '__main__':
 
     generate_tflite_with_weight(model, cfg['resolution'], tflite_path, train_loader,
                                 n_calibrate_sample=500)
-
+    print("TFLite model generated at: ", tflite_path)

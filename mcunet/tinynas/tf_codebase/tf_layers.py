@@ -17,8 +17,8 @@ def conv2d(
     if not param_initializer:
         param_initializer = {}
     output = _input
-    with tf.variable_scope(scope_name):
-        init_key = '%s/weight' % tf.get_variable_scope().name
+    with tf.compat.v1.variable_scope(scope_name):
+        init_key = '%s/weight' % tf.compat.v1.get_variable_scope().name
         # print(init_key, [
         #     kernel_size,
         #     kernel_size,
@@ -26,7 +26,7 @@ def conv2d(
         #     out_features])
         initializer = param_initializer.get(
             init_key, tf.contrib.layers.variance_scaling_initializer())
-        weight = tf.get_variable(
+        weight = tf.compat.v1.get_variable(
             name='weight',
             shape=[
                 kernel_size,
@@ -83,7 +83,7 @@ def depthwise_conv2d(
         init_key = '%s/weight' % tf.get_variable_scope().name
         initializer = param_initializer.get(
             init_key, tf.contrib.layers.variance_scaling_initializer())
-        weight = tf.get_variable(
+        weight = tf.compat.v1.get_variable(
             name='weight', shape=[kernel_size, kernel_size, in_features, 1],
             initializer=initializer
         )
@@ -146,8 +146,8 @@ def batch_norm(
         epsilon=1e-3,
         decay=0.9,
         param_initializer=None):
-    with tf.variable_scope('bn'):
-        scope = tf.get_variable_scope().name
+    with tf.compat.v1.variable_scope('bn'):
+        scope = tf.compat.v1.get_variable_scope().name
         if param_initializer is not None:
             bn_init = {
                 'beta': param_initializer['%s/bias' % scope],
@@ -280,7 +280,7 @@ class ConvLayer:
 
     def build(self, _input, net, init=None):
         output = _input
-        with tf.variable_scope(self.id):
+        with tf.compat.v1.variable_scope(self.id):
             output = conv2d(
                 output,
                 self.filter_num,

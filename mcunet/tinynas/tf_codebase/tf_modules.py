@@ -51,7 +51,7 @@ class ProxylessNASNets:
             self.accuracy = tf.reduce_mean(
                 tf.cast(correct_prediction, tf.float32))
 
-            self.global_variables_initializer = tf.global_variables_initializer()
+            self.global_variables_initializer = tf.compat.v1.global_variables_initializer()
         self._initialize_session(sess)
 
     @property
@@ -64,7 +64,7 @@ class ProxylessNASNets:
 
     def _initialize_session(self, sess):
         """ Initialize session, variables """
-        config = tf.ConfigProto()  # allow_soft_placement=True, log_device_placement=False
+        config = tf.compat.v1.ConfigProto()  # allow_soft_placement=True, log_device_placement=False
         # restrict model GPU memory utilization to min required
         # config.gpu_options.allow_growth = True
         if sess is None:
@@ -87,7 +87,7 @@ class ProxylessNASNets:
                 tf.float32,
                 shape=shape,
                 name='input_images')
-        self.labels = tf.placeholder(
+        self.labels = tf.compat.v1.placeholder(
             tf.float32,
             shape=[None, self.n_classes],
             name='labels')
